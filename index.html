@@ -87,6 +87,9 @@
   /* Edit button on rows */
   .btn-edit { padding: 4px 12px; border: 1px solid #b5d4f4; border-radius: 6px; background: #e6f1fb; color: #185fa5; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.15s; }
   .btn-edit:hover { background: #b5d4f4; }
+  .btn-delete { padding: 4px 12px; border: 1px solid #f4c5c5; border-radius: 6px; background: #fbe6e6; color: #a51818; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.15s; margin-left: 4px; }
+  .btn-delete:hover { background: #f4c5c5; }
+  .row-actions { white-space: nowrap; }
 
   /* Status badge inline */
   .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
@@ -598,6 +601,19 @@ function saveEdit() {
   saveToCloud();
 }
 
+function deleteIssue(rowIndex) {
+  const row = ROWS[rowIndex];
+  if (!row) return;
+  const msg = `确定要删除以下问题吗？\n\n编号: ${row[0]}\n描述: ${row[4]}\n提报人: ${row[2]}\n\n此操作不可撤销，删除后会自动同步到云端。`;
+  if (!confirm(msg)) return;
+  ROWS.splice(rowIndex, 1);
+  localStorage.setItem('issue-tracker-data', JSON.stringify(ROWS));
+  renderTable();
+  renderStats();
+  filterTable();
+  saveToCloud();
+}
+
 // ── Core functions ──
 
 async function init() {
@@ -690,7 +706,7 @@ function renderTable() {
       html += `<td>${content}</td>`;
     });
     // Action column
-    html += `<td><button class="btn-edit" onclick="openEditModal(${ri})">编辑</button></td>`;
+    html += `<td class="row-actions"><button class="btn-edit" onclick="openEditModal(${ri})">编辑</button><button class="btn-delete" onclick="deleteIssue(${ri})">删除</button></td>`;
     html += '</tr>';
   });
   body.innerHTML = html;
@@ -800,7 +816,7 @@ function filterTable() {
         }
         html += `<td>${content}</td>`;
       });
-      html += `<td><button class="btn-edit" onclick="openEditModal(${ri})">编辑</button></td>`;
+      html += `<td class="row-actions"><button class="btn-edit" onclick="openEditModal(${ri})">编辑</button><button class="btn-delete" onclick="deleteIssue(${ri})">删除</button></td>`;
       html += '</tr>';
     }
   });
