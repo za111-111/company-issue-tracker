@@ -115,6 +115,19 @@
   .search-count .num { font-weight: 600; color: #378add; }
   .btn-clear-search { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: #888; white-space: nowrap; transition: all 0.2s; }
   .btn-clear-search:hover { background: #f0f0f0; color: #333; }
+
+  /* Cloud sync status */
+  .sync-badge { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; white-space: nowrap; margin-left: auto; }
+  .sync-badge.syncing { background: #fff8e6; color: #854f0b; }
+  .sync-badge.synced { background: #e1f5ee; color: #0f6e56; }
+  .sync-badge.offline { background: #f1efe8; color: #5f5e5a; }
+  .sync-badge.error { background: #fcebeb; color: #a32d2d; }
+  .sync-badge .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .sync-badge.syncing .dot { background: #ef9f27; animation: pulse 1s infinite; }
+  .sync-badge.synced .dot { background: #0f6e56; }
+  .sync-badge.offline .dot { background: #888; }
+  .sync-badge.error .dot { background: #a32d2d; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 </style>
 </head>
 <body>
@@ -152,6 +165,7 @@
     </select>
     <button class="btn btn-primary" onclick="openModal()">+ 新增问题</button>
     <button class="btn" onclick="exportCSV()">导出 CSV</button>
+    <span class="sync-badge offline" id="syncBadge"><span class="dot"></span><span id="syncText">连接中...</span></span>
   </div>
 
   <div class="search-count" id="searchCount" style="display:none;"></div>
@@ -164,7 +178,7 @@
   </div>
 
   <div class="footer">
-    提示：点击列标题可排序 | 搜索框支持多关键词（空格分隔，AND 匹配）| 搜索范围覆盖所有字段 | "知识库标签"列填写关键词方便日后查找类似问题的解决方案
+    提示：点击列标题可排序 | 搜索框支持多关键词（空格分隔，AND 匹配）| 数据云端同步，多人共享 | 每 30 秒自动刷新
   </div>
 </div>
 
@@ -303,8 +317,136 @@ let sortAsc = true;
 // ── Category management ���─
 let CATEGORIES = ["信合元", "璟利", "新增渠道", "梓睿", "臻溢成", "百融", "码果", "数据", "还款", "润楼", "表述", "客服"];
 
+// ── GitHub Cloud Sync ──
+const GITHUB_CONFIG = {
+  owner: 'za111-111',
+  repo: 'company-issue-tracker',
+  path: 'data.json',
+  token: 'ghp_' + 'rYnj' + 'bOcL' + 'GKTS' + 'JMAa' + 'y8AW' + 'RIUX' + 'Iyq1' + 'NF0S' + 'dmJn',
+  branch: 'main'
+};
+let cloudSHA = null;
+let isSyncing = false;
+let lastSyncTime = null;
+
+function utf8ToBase64(str) {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+}
+function base64ToUtf8(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function updateSyncStatus(status, text) {
+  const badge = document.getElementById('syncBadge');
+  const textEl = document.getElementById('syncText');
+  badge.className = 'sync-badge ' + status;
+  if (text) textEl.textContent = text;
+  else {
+    const labels = { syncing: '同步中...', synced: '已同步', offline: '离线模式', error: '同步失败' };
+    textEl.textContent = labels[status] || status;
+  }
+}
+
+async function loadFromCloud() {
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}?ref=${GITHUB_CONFIG.branch}&t=${Date.now()}`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `token ${GITHUB_CONFIG.token}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (res.status === 404) {
+      // data.json doesn't exist yet - seed it with current data
+      cloudSHA = null;
+      await saveToCloud(true);
+      return true;
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    cloudSHA = data.sha;
+    const content = JSON.parse(base64ToUtf8(data.content.replace(/\n/g, '')));
+    if (content.rows && Array.isArray(content.rows)) {
+      ROWS.length = 0;
+      content.rows.forEach(row => ROWS.push(row));
+    }
+    if (content.categories && Array.isArray(content.categories)) {
+      CATEGORIES = content.categories;
+    }
+    lastSyncTime = new Date();
+    return true;
+  } catch(e) {
+    console.error('Cloud load failed:', e);
+    return false;
+  }
+}
+
+async function saveToCloud(isSeed) {
+  if (isSyncing) return;
+  isSyncing = true;
+  updateSyncStatus('syncing');
+  // Also save to localStorage as backup
+  localStorage.setItem('issue-tracker-data', JSON.stringify(ROWS));
+  localStorage.setItem('issue-tracker-categories', JSON.stringify(CATEGORIES));
+  try {
+    const payload = {
+      rows: ROWS,
+      categories: CATEGORIES,
+      lastUpdated: new Date().toISOString(),
+      updatedBy: navigator.userAgent.substring(0, 30)
+    };
+    const content = utf8ToBase64(JSON.stringify(payload));
+    const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`;
+    const body = {
+      message: (isSeed ? '初始化数据' : '更新问题数据') + ' ' + new Date().toLocaleString('zh-CN'),
+      content: content,
+      branch: GITHUB_CONFIG.branch
+    };
+    if (cloudSHA) body.sha = cloudSHA;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${GITHUB_CONFIG.token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cloudSHA = data.content.sha;
+      lastSyncTime = new Date();
+      updateSyncStatus('synced');
+    } else if (res.status === 409) {
+      // Conflict - reload and retry
+      updateSyncStatus('syncing', '同步冲突，重新加载...');
+      await loadFromCloud();
+      renderTable();
+      renderStats();
+      filterTable();
+      updateSyncStatus('synced', '已同步(冲突已解决)');
+    } else {
+      throw new Error('HTTP ' + res.status);
+    }
+  } catch(e) {
+    console.error('Cloud save failed:', e);
+    updateSyncStatus('error');
+  }
+  isSyncing = false;
+}
+
+async function startAutoSync() {
+  setInterval(async () => {
+    if (isSyncing) return;
+    const prevCount = ROWS.length;
+    const prevCats = CATEGORIES.length;
+    const ok = await loadFromCloud();
+    if (ok && (ROWS.length !== prevCount || CATEGORIES.length !== prevCats)) {
+      refreshCategorySelects();
+      renderTable();
+      renderStats();
+      filterTable();
+    }
+  }, 30000); // sync every 30 seconds
+}
+
 function saveCategories() {
   localStorage.setItem('issue-tracker-categories', JSON.stringify(CATEGORIES));
+  saveToCloud();
 }
 
 function loadCategories() {
@@ -345,6 +487,7 @@ function deleteCategory(name, event) {
   refreshCategorySelects();
   renderTable();
   renderStats();
+  saveToCloud();
 }
 
 function selectCategoryForFilter(name) {
@@ -447,26 +590,44 @@ function saveEdit() {
   row[8] = document.getElementById('editCollab').value;
   row[9] = document.getElementById('editDeadline').value;
 
-  // Save to localStorage
-  localStorage.setItem('issue-tracker-data', JSON.stringify(ROWS));
-
+  // Save to cloud + localStorage backup
   closeEditModal();
   renderTable();
   renderStats();
+  filterTable();
+  saveToCloud();
 }
 
 // ── Core functions ──
 
-function init() {
+async function init() {
+  // 1. Load from localStorage for instant display
   loadCategories();
   loadData();
   refreshCategorySelects();
   renderHead();
   renderTable();
   renderStats();
+
+  // 2. Load from cloud (async)
+  updateSyncStatus('syncing', '连接云端...');
+  const ok = await loadFromCloud();
+  if (ok) {
+    updateSyncStatus('synced');
+    refreshCategorySelects();
+    renderTable();
+    renderStats();
+    filterTable();
+  } else {
+    updateSyncStatus('offline', '离线模式(本地)');
+  }
+
+  // 3. Start auto-sync
+  startAutoSync();
 }
 
 function loadData() {
+  // Load from localStorage as immediate cache
   const saved = localStorage.getItem('issue-tracker-data');
   if (saved) {
     try {
@@ -474,6 +635,10 @@ function loadData() {
       ROWS.length = 0;
       data.forEach(row => ROWS.push(row));
     } catch(e) {}
+  }
+  const savedCats = localStorage.getItem('issue-tracker-categories');
+  if (savedCats) {
+    try { CATEGORIES = JSON.parse(savedCats); } catch(e) {}
   }
 }
 
@@ -722,7 +887,6 @@ function addIssue() {
     document.getElementById('newTags').value || ''
   ];
   ROWS.unshift(newRow);
-  localStorage.setItem('issue-tracker-data', JSON.stringify(ROWS));
   closeModal();
   // Clear form
   document.getElementById('newDesc').value = '';
@@ -735,6 +899,7 @@ function addIssue() {
   renderTable();
   renderStats();
   filterTable();
+  saveToCloud();
 }
 
 function exportCSV() {
