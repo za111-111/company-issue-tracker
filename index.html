@@ -437,6 +437,9 @@ function saveEdit() {
   row[8] = document.getElementById('editCollab').value;
   row[9] = document.getElementById('editDeadline').value;
 
+  // Save to localStorage
+  localStorage.setItem('issue-tracker-data', JSON.stringify(ROWS));
+
   closeEditModal();
   renderTable();
   renderStats();
@@ -446,10 +449,22 @@ function saveEdit() {
 
 function init() {
   loadCategories();
+  loadData();
   refreshCategorySelects();
   renderHead();
   renderTable();
   renderStats();
+}
+
+function loadData() {
+  const saved = localStorage.getItem('issue-tracker-data');
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      ROWS.length = 0;
+      data.forEach(row => ROWS.push(row));
+    } catch(e) {}
+  }
 }
 
 function renderHead() {
@@ -651,6 +666,7 @@ function addIssue() {
     document.getElementById('newTags').value || ''
   ];
   ROWS.unshift(newRow);
+  localStorage.setItem('issue-tracker-data', JSON.stringify(ROWS));
   closeModal();
   // Clear form
   document.getElementById('newDesc').value = '';
