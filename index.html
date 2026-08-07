@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公司问题追踪表</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .header { background: #fff; border-radius: 12px; padding: 24px 28px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .header h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .header p { font-size: 14px; color: #888; }
+  .stats { display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
+  .stat-card { background: #f8f9fa; border-radius: 8px; padding: 14px 20px; min-width: 120px; }
+  .stat-card .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .stat-card .value { font-size: 24px; font-weight: 600; }
+  .stat-card.urgent .value { color: #e24b4a; }
+  .stat-card.high .value { color: #ef9f27; }
+  .stat-card.normal .value { color: #1d9e75; }
+  .stat-card.done .value { color: #534ab7; }
+
+  .toolbar { background: #fff; border-radius: 12px; padding: 16px 24px; margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .toolbar input, .toolbar select { padding: 8px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .toolbar input:focus, .toolbar select:focus { border-color: #378add; }
+  .toolbar input[type="text"] { flex: 1; min-width: 200px; }
+  .toolbar .label { font-size: 13px; color: #888; white-space: nowrap; }
+  .btn { padding: 8px 18px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+  .btn:hover { background: #f0f0f0; }
+  .btn-primary { background: #378add; color: #fff; border-color: #378add; }
+  .btn-primary:hover { background: #185fa5; }
+
+  .table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #f8f9fa; padding: 12px 10px; text-align: left; font-weight: 600; color: #555; white-space: nowrap; border-bottom: 2px solid #e0e0e0; position: sticky; top: 0; cursor: pointer; user-select: none; }
+  thead th:hover { background: #eef1f4; }
+  thead th .sort-indicator { font-size: 10px; color: #aaa; margin-left: 4px; }
+  tbody td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; line-height: 1.5; }
+  tbody tr:hover { background: #f8fafe; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .badge-p0 { background: #fcebeb; color: #a32d2d; }
+  .badge-p1 { background: #faecda; color: #854f0b; }
+  .badge-p2 { background: #e6f1fb; color: #185fa5; }
+  .badge-p3 { background: #f1efe8; color: #5f5e5a; }
+
+  .status-unstarted { color: #888; }
+  .status-processing { color: #185fa5; font-weight: 500; }
+  .status-resolved { color: #0f6e56; font-weight: 500; }
+  .status-closed { color: #5f5e5a; }
+
+  .severity-high { color: #a32d2d; font-weight: 500; }
+  .severity-mid { color: #854f0b; }
+  .severity-low { color: #5f5e5a; }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { background: #eeedfe; color: #534ab7; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+
+  .empty-row { text-align: center; padding: 40px; color: #aaa; }
+
+  .footer { text-align: center; padding: 20px; font-size: 12px; color: #aaa; }
+
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1000; justify-content: center; align-items: center; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 28px; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+  .modal h2 { font-size: 18px; margin-bottom: 20px; }
+  .modal .form-row { margin-bottom: 14px; }
+  .modal .form-row label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+  .modal .form-row input, .modal .form-row select, .modal .form-row textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; }
+  .modal .form-row textarea { min-height: 60px; resize: vertical; }
+  .modal .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Category management */
+  .category-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .category-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 14px; font-size: 12px; background: #e6f1fb; color: #185fa5; cursor: pointer; border: 0.5px solid #b5d4f4; transition: all 0.15s; }
+  .category-chip:hover { background: #b5d4f4; }
+  .category-chip.active { background: #378add; color: #fff; border-color: #378add; }
+  .category-chip .chip-del { margin-left: 2px; padding: 0 3px; border-radius: 50%; font-size: 14px; line-height: 1; opacity: 0.6; cursor: pointer; }
+  .category-chip .chip-del:hover { opacity: 1; background: rgba(0,0,0,0.15); }
+  .category-input-row { display: flex; gap: 6px; }
+  .category-input-row input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; outline: none; }
+  .category-input-row input:focus { border-color: #378add; }
+  .category-input-row button { padding: 6px 12px; border: 1px solid #378add; border-radius: 8px; background: #378add; color: #fff; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .category-input-row button:hover { background: #185fa5; }
+  .category-manage-hint { font-size: 11px; color: #aaa; margin-top: 4px; }
+
+  /* Edit button on rows */
+  .btn-edit { padding: 4px 12px; border: 1px solid #b5d4f4; border-radius: 6px; background: #e6f1fb; color: #185fa5; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.15s; }
+  .btn-edit:hover { background: #b5d4f4; }
+
+  /* Status badge inline */
+  .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .status-badge.unstarted { background: #f1efe8; color: #5f5e5a; }
+  .status-badge.processing { background: #e6f1fb; color: #185fa5; }
+  .status-badge.resolved { background: #e1f5ee; color: #0f6e56; }
+  .status-badge.closed { background: #eeedfe; color: #534ab7; }
+
+  .progress-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .progress-badge.pending { background: #f1efe8; color: #5f5e5a; }
+  .progress-badge.ongoing { background: #faecda; color: #854f0b; }
+  .progress-badge.reviewing { background: #e6f1fb; color: #185fa5; }
+  .progress-badge.done { background: #e1f5ee; color: #0f6e56; }
+
+  /* Wider modal for editing */
+  .modal-wide { max-width: 700px; }
+
+  /* Editable field highlight */
+  .editable-cell { cursor: pointer; border-radius: 4px; padding: 2px 4px; transition: background 0.15s; }
+  .editable-cell:hover { background: #f0f0f0; }
+  .editable-cell.empty { color: #bbb; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>公司问题追踪表</h1>
+    <p>统一记录、跟踪和归档公司运营及工作中的各类问题，形成可检索的知识库</p>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchInput" placeholder="搜索问题描述、解决方案、知识库标签..." oninput="filterTable()">
+    <div style="position: relative;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <select id="filterCategory" onchange="filterTable()" style="min-width: 100px;">
+          <option value="">全部分类</option>
+        </select>
+        <button class="btn" onclick="openCategoryManager()" title="管理分类" style="padding: 6px 10px; font-size: 18px; line-height: 1;">⚙</button>
+      </div>
+    </div>
+    <select id="filterStatus" onchange="filterTable()">
+      <option value="">全部状态</option>
+      <option value="未开始">未开始</option>
+      <option value="处理中">处理中</option>
+      <option value="已解决">已解决</option>
+      <option value="已关闭">已关闭</option>
+    </select>
+    <select id="filterPriority" onchange="filterTable()">
+      <option value="">全部优先级</option>
+      <option value="P0">P0 紧急</option>
+      <option value="P1">P1 高</option>
+      <option value="P2">P2 中</option>
+      <option value="P3">P3 低</option>
+    </select>
+    <button class="btn btn-primary" onclick="openModal()">+ 新增问题</button>
+    <button class="btn" onclick="exportCSV()">导出 CSV</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="dataTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    提示：点击列标题可排序 | 搜索框支持全文检索 | "知识库标签"列填写关键词方便日后查找类似问题的解决方案
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2>新增问题</h2>
+    <div class="form-row">
+      <label>问题描述 *</label>
+      <textarea id="newDesc" placeholder="请描述遇到的问题..."></textarea>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <div class="form-row" style="flex:1">
+        <label>问题分类</label>
+        <select id="newCategory">
+        </select>
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>严重程度</label>
+        <select id="newSeverity"><option>高</option><option>中</option><option>低</option></select>
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>优先级</label>
+        <select id="newPriority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <div class="form-row" style="flex:1">
+        <label>负责人</label>
+        <input type="text" id="newOwner" placeholder="负责人姓名">
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>协作人</label>
+        <input type="text" id="newCollab" placeholder="协作人姓名">
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>截止日期</label>
+        <input type="date" id="newDeadline">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>提报人</label>
+      <input type="text" id="newReporter" placeholder="您的姓名">
+    </div>
+    <div class="form-row">
+      <label>知识库标签（用分号分隔）</label>
+      <input type="text" id="newTags" placeholder="如：退款流程; 客户投诉; SOP">
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="addIssue()">提交</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分类管理弹窗 -->
+<div class="modal-overlay" id="categoryModalOverlay">
+  <div class="modal">
+    <h2>管理问题分类</h2>
+    <p style="font-size: 13px; color: #888; margin-bottom: 12px;">添加、删除或选择当前筛选项。点击分类标签可快速筛选。</p>
+    <div class="category-chips" id="categoryChips"></div>
+    <div class="category-input-row" style="margin-bottom: 8px;">
+      <input type="text" id="newCategoryName" placeholder="输入新分类名称..." onkeydown="if(event.key==='Enter')addCategory()">
+      <button onclick="addCategory()">添加</button>
+    </div>
+    <p class="category-manage-hint" id="categoryHint"></p>
+    <div class="actions">
+      <button class="btn" onclick="closeCategoryManager()">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑问题弹窗 -->
+<div class="modal-overlay" id="editModalOverlay">
+  <div class="modal modal-wide">
+    <h2>编辑问题详情</h2>
+    <div id="editIssueInfo" style="font-size: 13px; color: #555; margin-bottom: 16px; padding: 10px; background: #f8f9fa; border-radius: 8px;"></div>
+    <div style="display: flex; gap: 12px;">
+      <div class="form-row" style="flex:1">
+        <label>处理进度</label>
+        <select id="editProgress">
+          <option value="待处理">待处理</option>
+          <option value="进行中">进行中</option>
+          <option value="待验收">待验收</option>
+          <option value="已解决">已解决</option>
+        </select>
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>状态</label>
+        <select id="editStatus">
+          <option value="未开始">未开始</option>
+          <option value="处理中">处理中</option>
+          <option value="已解决">已解决</option>
+          <option value="已关闭">已关闭</option>
+        </select>
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>解决日期</label>
+        <input type="date" id="editResolveDate">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>解决方案</label>
+      <textarea id="editSolution" placeholder="请填写具体的解决方案和处理措施..."></textarea>
+    </div>
+    <div class="form-row">
+      <label>复盘备注</label>
+      <textarea id="editReview" placeholder="根因分析、经验教训、后续改进建议..."></textarea>
+    </div>
+    <div class="form-row">
+      <label>负责人</label>
+      <input type="text" id="editOwner" placeholder="负责人姓名">
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <div class="form-row" style="flex:1">
+        <label>协作人</label>
+        <input type="text" id="editCollab" placeholder="协作人姓名">
+      </div>
+      <div class="form-row" style="flex:1">
+        <label>截止日期</label>
+        <input type="date" id="editDeadline">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="closeEditModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLUMNS = ["问题编号", "提报日期", "提报人", "问题分类", "问题描述", "严重程度", "优先级", "负责人", "协作人", "截止日期", "处理进度", "状态", "解决方案", "解决日期", "复盘备注", "知识库标签", "操作"];
+let ROWS = [["P20260805-001", "2026-08-05", "友丽", "信合元/璟利", "信合元和璟利的工单归属模糊。（工单查不到怎么办）", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "工单归属; 信合元; 璟利"], ["P20260805-002", "2026-08-05", "友丽", "信合元", "信合元线下对公还款操作流程。（渠道操作推流+对公表格）", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "对公还款; 操作流程; 信合元"], ["P20260805-003", "2026-08-05", "婉莹", "新增渠道", "新增渠道合同的操作流程如日期盖章", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "渠道合同; 盖章流程; 新增渠道"], ["P20260805-004", "2026-08-05", "婉莹", "梓睿", "梓睿表格混乱问题", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "梓睿; 表格; 数据混乱"], ["P20260805-005", "2026-08-05", "婉莹", "信合元", "客户反映还款了但系统仍查找到欠款问题", "高", "P1", "", "", "", "待处理", "未开始", "", "", "", "还款; 系统查询; 信合元; 欠款"], ["P20260805-006", "2026-08-05", "刘冉", "臻溢成/百融", "有客户在相关app上查询不到借款信息。", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "APP查询; 借款信息; 臻溢成; 百融"], ["P20260805-007", "2026-08-05", "刘冉", "臻溢成", "客户还款APP会更新吗", "低", "P3", "", "", "", "待处理", "未开始", "", "", "", "APP更新; 还款; 臻溢成"], ["P20260805-008", "2026-08-05", "刘冉", "码果", "拍拍贷、OPPO对公还款的客户，联系质疑款项未到账。", "高", "P1", "", "", "", "待处理", "未开始", "", "", "", "对公还款; 码果; 拍拍贷; OPPO; 到账"], ["P20260805-009", "2026-08-05", "刘冉", "码果", "客户还款之后，多久可以在平台核实到欠款已经结清", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "还款结清; 码果; 核实时效"], ["P20260805-010", "2026-08-05", "宋蕾", "数据", "不清楚台账里的减免金额是怎么算", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "台账; 减免金额; 数据计算"], ["P20260805-011", "2026-08-05", "宋蕾", "码果", "如有客户，在app上一直显示还款失败，打客服核实不到对公账户，这种情况如何解决。", "高", "P1", "", "", "", "待处理", "未开始", "", "", "", "还款失败; 码果; 对公账户; 客服"], ["P20260805-012", "2026-08-05", "宋蕾", "还款", "遇到还错账户这种情况怎么办", "高", "P1", "", "", "", "待处理", "未开始", "", "", "", "还错账户; 还款; 处理方案"], ["P20260805-013", "2026-08-05", "宋蕾", "润楼", "润楼这个产品不能入账多久能恢复", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "润楼; 入账; 恢复时效"], ["P20260805-014", "2026-08-05", "汤总", "新增渠道", "渠道不及时反馈调解回款情况", "高", "P1", "", "", "", "待处理", "未开始", "", "", "", "渠道; 回款; 反馈; 调解"], ["P20260805-015", "2026-08-05", "汤总", "信合元", "信合元璟利", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "信合元; 璟利"], ["P20260805-016", "2026-08-05", "汤总", "表述", "上游称呼码果 信合元 对下游称呼RL&RLX", "低", "P3", "", "", "", "待处理", "未开始", "", "", "", "称呼; 码果; 信合元; RL; RLX"], ["P20260805-017", "2026-08-05", "汤总", "信合元", "工单是否有回复", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "工单; 回复; 信合元"], ["P20260805-018", "2026-08-05", "汤总", "数据", "数据维护", "低", "P3", "", "", "", "待处理", "未开始", "", "", "", "数据; 维护"], ["P20260806-001", "2026-08-06", "婉莹", "客服", "客户反馈上门暴力催收怎么办", "高", "P1", "", "", "", "待处理", "未开始", "", "", "", "暴力催收; 客服; 投诉处理"], ["P20260806-002", "2026-08-06", "婉莹", "客服", "客户说没有邮箱让加微信发结清证明可以加吗", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "结清证明; 微信; 邮箱; 客服"], ["P20260806-003", "2026-08-06", "婉莹", "客服", "我发到群里的电话工单是否全部需要跟进反馈", "中", "P2", "", "", "", "待处理", "未开始", "", "", "", "电话工单; 跟进; 反馈; 客服"]];
+let sortColumn = -1;
+let sortAsc = true;
+
+// ── Category management ──
+let CATEGORIES = ["信合元", "璟利", "新增渠道", "梓睿", "臻溢成", "百融", "码果", "数据", "还款", "润楼", "表述", "客服"];
+
+function saveCategories() {
+  localStorage.setItem('issue-tracker-categories', JSON.stringify(CATEGORIES));
+}
+
+function loadCategories() {
+  const saved = localStorage.getItem('issue-tracker-categories');
+  if (saved) {
+    try { CATEGORIES = JSON.parse(saved); } catch(e) {}
+  }
+}
+
+function addCategory() {
+  const input = document.getElementById('newCategoryName');
+  const name = input.value.trim();
+  if (!name) return;
+  if (CATEGORIES.includes(name)) {
+    input.value = '';
+    input.focus();
+    return;
+  }
+  CATEGORIES.push(name);
+  saveCategories();
+  input.value = '';
+  input.focus();
+  renderCategoryChips();
+  refreshCategorySelects();
+}
+
+function deleteCategory(name, event) {
+  event.stopPropagation();
+  // Remove from list
+  CATEGORIES = CATEGORIES.filter(c => c !== name);
+  saveCategories();
+  // Replace all rows using this category with the first available category or empty
+  const fallback = CATEGORIES.length > 0 ? CATEGORIES[0] : '';
+  ROWS.forEach(row => {
+    if (row[3] === name) row[3] = fallback;
+  });
+  renderCategoryChips();
+  refreshCategorySelects();
+  renderTable();
+  renderStats();
+}
+
+function selectCategoryForFilter(name) {
+  document.getElementById('filterCategory').value = name;
+  closeCategoryManager();
+  filterTable();
+}
+
+function renderCategoryChips() {
+  const container = document.getElementById('categoryChips');
+  const currentFilter = document.getElementById('filterCategory').value;
+  let html = '';
+  CATEGORIES.forEach(name => {
+    const isActive = currentFilter === name;
+    const cls = isActive ? 'category-chip active' : 'category-chip';
+    html += `<span class="${cls}" onclick="selectCategoryForFilter('${name}')">${name}<span class="chip-del" onclick="deleteCategory('${name}', event)" title="删除此分类">&times;</span></span>`;
+  });
+  if (CATEGORIES.length === 0) {
+    html = '<span style="font-size: 13px; color: #aaa;">还没有分类，请在下方添加</span>';
+  }
+  container.innerHTML = html;
+  document.getElementById('categoryHint').textContent =
+    CATEGORIES.length > 0 ? `共 ${CATEGORIES.length} 个分类 · 点击标签直接筛选 · 点击 &times; 删除` : '';
+}
+
+function refreshCategorySelects() {
+  // Update filter dropdown
+  const filterSelect = document.getElementById('filterCategory');
+  const filterVal = filterSelect.value;
+  filterSelect.innerHTML = '<option value="">全部分类</option>' +
+    CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+  if (CATEGORIES.includes(filterVal)) filterSelect.value = filterVal;
+
+  // Update new issue modal dropdown
+  const newSelect = document.getElementById('newCategory');
+  newSelect.innerHTML = CATEGORIES.map(c => `<option>${c}</option>`).join('');
+}
+
+function openCategoryManager() {
+  loadCategories();
+  renderCategoryChips();
+  refreshCategorySelects();
+  document.getElementById('categoryModalOverlay').classList.add('active');
+  document.getElementById('newCategoryName').focus();
+}
+
+function closeCategoryManager() {
+  document.getElementById('categoryModalOverlay').classList.remove('active');
+  document.getElementById('newCategoryName').value = '';
+}
+
+// ── Edit issue functions ──
+let editingRowIndex = -1;
+
+function openEditModal(rowIndex) {
+  editingRowIndex = rowIndex;
+  const row = ROWS[rowIndex];
+
+  // Show issue info
+  document.getElementById('editIssueInfo').innerHTML = `
+    <strong>${row[0]}</strong> &nbsp;|&nbsp; ${row[4]} &nbsp;|&nbsp; 提报人: ${row[2]} &nbsp;|&nbsp; 分类: ${row[3]}`;
+
+  // Fill form fields
+  document.getElementById('editProgress').value = row[10] || '待处理';
+  document.getElementById('editStatus').value = row[11] || '未开始';
+  document.getElementById('editSolution').value = row[12] || '';
+  document.getElementById('editResolveDate').value = row[13] || '';
+  document.getElementById('editReview').value = row[14] || '';
+  document.getElementById('editOwner').value = row[7] || '';
+  document.getElementById('editCollab').value = row[8] || '';
+  document.getElementById('editDeadline').value = row[9] || '';
+
+  document.getElementById('editModalOverlay').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('editModalOverlay').classList.remove('active');
+  editingRowIndex = -1;
+}
+
+function saveEdit() {
+  if (editingRowIndex < 0) return;
+  const row = ROWS[editingRowIndex];
+
+  // Save progress and status
+  row[10] = document.getElementById('editProgress').value;
+  row[11] = document.getElementById('editStatus').value;
+
+  // If status changed to 已解决 and no resolve date, auto-fill today
+  if (row[11] === '已解决' && !document.getElementById('editResolveDate').value) {
+    const today = new Date();
+    row[13] = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  } else {
+    row[13] = document.getElementById('editResolveDate').value;
+  }
+
+  row[12] = document.getElementById('editSolution').value;
+  row[14] = document.getElementById('editReview').value;
+  row[7] = document.getElementById('editOwner').value;
+  row[8] = document.getElementById('editCollab').value;
+  row[9] = document.getElementById('editDeadline').value;
+
+  closeEditModal();
+  renderTable();
+  renderStats();
+}
+
+// ── Core functions ──
+
+function init() {
+  loadCategories();
+  refreshCategorySelects();
+  renderHead();
+  renderTable();
+  renderStats();
+}
+
+function renderHead() {
+  const head = document.getElementById('tableHead');
+  let html = '<tr>';
+  COLUMNS.forEach((col, i) => {
+    html += `<th onclick="sortBy(${i})">${col}<span class="sort-indicator"></span></th>`;
+  });
+  html += '</tr>';
+  head.innerHTML = html;
+}
+
+function renderTable() {
+  const body = document.getElementById('tableBody');
+  if (ROWS.length === 0) {
+    body.innerHTML = '<tr><td colspan="' + COLUMNS.length + '" class="empty-row">暂无数据</td></tr>';
+    return;
+  }
+  let html = '';
+  ROWS.forEach((row, ri) => {
+    html += '<tr>';
+    row.forEach((cell, ci) => {
+      let content = cell || '';
+      const colName = COLUMNS[ci];
+
+      if (colName === '优先级' && cell) {
+        const cls = 'badge-' + cell.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0,2);
+        content = `<span class="badge ${cls}">${cell}</span>`;
+      } else if (colName === '严重程度') {
+        const cls = cell === '高' ? 'severity-high' : (cell === '中' ? 'severity-mid' : 'severity-low');
+        content = `<span class="${cls}">${cell}</span>`;
+      } else if (colName === '状态') {
+        const statusMap = { '未开始': ['unstarted', '未开始'], '处理中': ['processing', '处理中'], '已解决': ['resolved', '已解决'], '已关闭': ['closed', '已关闭'] };
+        const s = statusMap[cell] || ['unstarted', cell || '未开始'];
+        content = `<span class="status-badge ${s[0]}">${s[1]}</span>`;
+      } else if (colName === '处理进度') {
+        const progressMap = { '待处理': ['pending', '待处理'], '进行中': ['ongoing', '进行中'], '待验收': ['reviewing', '待验收'], '已解决': ['done', '已解决'] };
+        const p = progressMap[cell] || ['pending', cell || '待处理'];
+        content = `<span class="progress-badge ${p[0]}">${p[1]}</span>`;
+      } else if (colName === '知识库标签' && cell) {
+        const tags = cell.split(';').map(t => t.trim()).filter(t => t);
+        content = '<div class="tags">' + tags.map(t => `<span class="tag">${t}</span>`).join('') + '</div>';
+      } else if (colName === '解决方案' || colName === '解决日期' || colName === '复盘备注') {
+        const cls = cell ? 'editable-cell' : 'editable-cell empty';
+        content = `<span class="${cls}">${cell || '点击编辑填写'}</span>`;
+      }
+
+      html += `<td>${content}</td>`;
+    });
+    // Action column
+    html += `<td><button class="btn-edit" onclick="openEditModal(${ri})">编辑</button></td>`;
+    html += '</tr>';
+  });
+  body.innerHTML = html;
+}
+
+function renderStats() {
+  const stats = document.getElementById('stats');
+  const total = ROWS.length;
+  const urgent = ROWS.filter(r => r[6] === 'P0').length;
+  const high = ROWS.filter(r => r[6] === 'P1').length;
+  const processing = ROWS.filter(r => r[11] === '处理中' || r[11] === '未开始').length;
+  const resolved = ROWS.filter(r => r[11] === '已解决' || r[11] === '已关闭').length;
+
+  stats.innerHTML = `
+    <div class="stat-card"><div class="label">总问题数</div><div class="value">${total}</div></div>
+    <div class="stat-card urgent"><div class="label">P0 紧急</div><div class="value">${urgent}</div></div>
+    <div class="stat-card high"><div class="label">P1 高优</div><div class="value">${high}</div></div>
+    <div class="stat-card"><div class="label">待处理</div><div class="value">${processing}</div></div>
+    <div class="stat-card done"><div class="label">已解决</div><div class="value">${resolved}</div></div>
+  `;
+}
+
+function filterTable() {
+  // Rebuild filter selects in case categories changed
+  refreshCategorySelects();
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const cat = document.getElementById('filterCategory').value;
+  const status = document.getElementById('filterStatus').value;
+  const priority = document.getElementById('filterPriority').value;
+
+  const body = document.getElementById('tableBody');
+  let visibleCount = 0;
+  let html = '';
+
+  ROWS.forEach((row) => {
+    let match = true;
+    if (cat && row[3] !== cat) match = false;
+    if (status && row[11] !== status) match = false;
+    if (priority && row[6] !== priority) match = false;
+    if (search) {
+      const haystack = row.join(' ').toLowerCase();
+      if (!haystack.includes(search)) match = false;
+    }
+    if (match) {
+      visibleCount++;
+      html += '<tr>';
+      row.forEach((cell, ci) => {
+        let content = cell || '';
+        const colName = COLUMNS[ci];
+        if (colName === '优先级' && cell) {
+          const cls = 'badge-' + cell.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0,2);
+          content = `<span class="badge ${cls}">${cell}</span>`;
+        } else if (colName === '严重程度') {
+          const cls = cell === '高' ? 'severity-high' : (cell === '中' ? 'severity-mid' : 'severity-low');
+          content = `<span class="${cls}">${cell}</span>`;
+        } else if (colName === '状态') {
+          const statusMap = { '未开始': ['unstarted', '未开始'], '处理中': ['processing', '处理中'], '已解决': ['resolved', '已解决'], '已关闭': ['closed', '已关闭'] };
+          const s = statusMap[cell] || ['unstarted', cell || '未开始'];
+          content = `<span class="status-badge ${s[0]}">${s[1]}</span>`;
+        } else if (colName === '处理进度') {
+          const progressMap = { '待处理': ['pending', '待处理'], '进行中': ['ongoing', '进行中'], '待验收': ['reviewing', '待验收'], '已解决': ['done', '已解决'] };
+          const p = progressMap[cell] || ['pending', cell || '待处理'];
+          content = `<span class="progress-badge ${p[0]}">${p[1]}</span>`;
+        } else if (colName === '知识库标签' && cell) {
+          const tags = cell.split(';').map(t => t.trim()).filter(t => t);
+          content = '<div class="tags">' + tags.map(t => `<span class="tag">${t}</span>`).join('') + '</div>';
+        } else if (colName === '解决方案' || colName === '解决日期' || colName === '复盘备注') {
+          const cls = cell ? 'editable-cell' : 'editable-cell empty';
+          content = `<span class="${cls}">${cell || '点击编辑填写'}</span>`;
+        }
+        html += `<td>${content}</td>`;
+      });
+      html += `<td><button class="btn-edit" onclick="openEditModal(${ri})">编辑</button></td>`;
+      html += '</tr>';
+    }
+  });
+
+  if (visibleCount === 0) {
+    body.innerHTML = '<tr><td colspan="' + COLUMNS.length + '" class="empty-row">未找到匹配的问题记录</td></tr>';
+  } else {
+    body.innerHTML = html;
+  }
+}
+
+function sortBy(colIndex) {
+  if (sortColumn === colIndex) {
+    sortAsc = !sortAsc;
+  } else {
+    sortColumn = colIndex;
+    sortAsc = true;
+  }
+  ROWS.sort((a, b) => {
+    let av = a[colIndex] || '';
+    let bv = b[colIndex] || '';
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+  renderTable();
+}
+
+function openModal() {
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function addIssue() {
+  const desc = document.getElementById('newDesc').value.trim();
+  if (!desc) {
+    alert('请填写问题描述');
+    return;
+  }
+  const today = new Date();
+  const dateStr = today.getFullYear() + '-' +
+    String(today.getMonth()+1).padStart(2,'0') + '-' +
+    String(today.getDate()).padStart(2,'0');
+  const seq = String(ROWS.length + 1).padStart(3, '0');
+  const id = 'P' + dateStr.replace(/-/g, '') + '-' + seq;
+
+  // Ensure we have at least one category
+  if (CATEGORIES.length === 0) {
+    CATEGORIES.push('未分类');
+    saveCategories();
+  }
+
+  const catSelect = document.getElementById('newCategory');
+  const selectedCat = catSelect.value || CATEGORIES[0];
+
+  const newRow = [
+    id,
+    dateStr,
+    document.getElementById('newReporter').value || '',
+    selectedCat,
+    desc,
+    document.getElementById('newSeverity').value,
+    document.getElementById('newPriority').value,
+    document.getElementById('newOwner').value || '',
+    document.getElementById('newCollab').value || '',
+    document.getElementById('newDeadline').value || '',
+    '待处理',
+    '未开始',
+    '',
+    '',
+    '',
+    document.getElementById('newTags').value || ''
+  ];
+  ROWS.unshift(newRow);
+  closeModal();
+  // Clear form
+  document.getElementById('newDesc').value = '';
+  document.getElementById('newReporter').value = '';
+  document.getElementById('newOwner').value = '';
+  document.getElementById('newCollab').value = '';
+  document.getElementById('newTags').value = '';
+  document.getElementById('newDeadline').value = '';
+  refreshCategorySelects();
+  renderTable();
+  renderStats();
+  filterTable();
+}
+
+function exportCSV() {
+  const exportCols = COLUMNS.slice(0, -1); // Exclude "操作" column
+  let csv = exportCols.join(',') + '\n';
+  ROWS.forEach(row => {
+    csv += row.map(cell => {
+      cell = cell || '';
+      if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+        return '"' + cell.replace(/"/g, '""') + '"';
+      }
+      return cell;
+    }).join(',') + '\n';
+  });
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = '公司问题追踪表.csv';
+  link.click();
+}
+
+init();
+</script>
+</body>
+</html>
