@@ -30,7 +30,7 @@
   .btn-primary { background: #378add; color: #fff; border-color: #378add; }
   .btn-primary:hover { background: #185fa5; }
 
-  .table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .table-wrap { background: #fff; border-radius: 12px; overflow-x: auto; overflow-y: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); -webkit-overflow-scrolling: touch; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th { background: #f8f9fa; padding: 12px 10px; text-align: left; font-weight: 600; color: #555; white-space: nowrap; border-bottom: 2px solid #e0e0e0; position: sticky; top: 0; cursor: pointer; user-select: none; }
   thead th:hover { background: #eef1f4; }
@@ -131,6 +131,46 @@
   .sync-badge.offline .dot { background: #888; }
   .sync-badge.error .dot { background: #a32d2d; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ── Mobile responsive ── */
+  @media (max-width: 768px) {
+    body { padding: 6px; }
+    .container { max-width: 100%; }
+    .header { padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; }
+    .header h1 { font-size: 17px; }
+    .header p { font-size: 12px; }
+    .stats { gap: 6px; margin-top: 10px; }
+    .stat-card { min-width: 0; flex: 1; padding: 8px 10px; border-radius: 6px; }
+    .stat-card .label { font-size: 10px; }
+    .stat-card .value { font-size: 18px; }
+    .toolbar { padding: 8px 10px; flex-direction: column; gap: 6px; align-items: stretch; border-radius: 10px; }
+    .toolbar input[type="text"] { min-width: 0; width: 100%; }
+    .toolbar select { width: 100%; }
+    .toolbar > div[style*="position: relative"] { width: 100%; }
+    .toolbar > div[style*="position: relative"] > div[style*="display: flex"] { width: 100%; }
+    .toolbar > div[style*="position: relative"] select { flex: 1; min-width: 0; }
+    .toolbar .btn, .toolbar .btn-primary, .toolbar .btn-clear-search { width: 100%; text-align: center; }
+    .sync-badge { margin-left: 0; justify-content: center; }
+    .search-count { font-size: 12px; padding: 4px 2px; }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+    table { font-size: 12px; min-width: 900px; }
+    thead th { padding: 8px 6px; font-size: 11px; }
+    tbody td { padding: 6px; line-height: 1.4; }
+    .btn-edit, .btn-delete { padding: 3px 8px; font-size: 11px; }
+    .row-actions { white-space: nowrap; }
+    .modal-overlay.active { align-items: flex-start; padding-top: 5vh; }
+    .modal { width: 94%; padding: 14px; border-radius: 12px; max-height: 88vh; }
+    .modal-wide { max-width: 94%; }
+    .modal h2 { font-size: 16px; margin-bottom: 12px; }
+    .modal .form-row input, .modal .form-row select, .modal .form-row textarea { font-size: 16px; }
+    .modal .actions { flex-direction: column-reverse; gap: 8px; }
+    .modal .actions .btn { width: 100%; }
+    .modal [style*="display: flex"], .modal [style*="display:flex"] { flex-direction: column !important; gap: 0 !important; }
+    .footer { font-size: 10px; padding: 10px 4px; line-height: 1.6; }
+    .category-chips { gap: 4px; }
+    .category-chip { font-size: 11px; padding: 3px 8px; }
+    .category-input-row input { font-size: 14px; }
+  }
 </style>
 </head>
 <body>
